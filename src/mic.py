@@ -3,7 +3,10 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import tempfile
+from model import SER
 import os
+import torch
+
 #Microphone Input
 def record_audio(duration=5):
     """Record audio from microphone"""
@@ -30,11 +33,13 @@ def save_audio(audio_data, sample_rate):
     """Save audio data to a temporary WAV file and return its path"""
     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
         sf.write(tmp_file.name, audio_data, sample_rate)
-        return tmp_file.name
+        return tmp_file.name, sample_rate
 
 def main():
     st.title("Simple Voice Recorder")
     st.write("Record and play your voice!")
+
+    ser = SER()
     
     # Initialize session state
     if 'recording' not in st.session_state:
@@ -63,9 +68,14 @@ def main():
     if st.session_state.audio_data is not None:
         st.write("Recorded Audio:")
         # Save audio to temporary file and create audio player
-        temp_audio_file = save_audio(st.session_state.audio_data, 
+        temp_audio_file, fs = save_audio(st.session_state.audio_data, 
                                    st.session_state.sample_rate)
         st.audio(temp_audio_file)
+
+        prediction = ser.analyse(temp_audio_file, fs)
+        print(type(prediction[0]))
+        emotion = max(prediction, key=lambda x: x["score"])
+        st.write(emotion["label"])
         
         # Clean up temporary file
         if os.path.exists(temp_audio_file):

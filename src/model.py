@@ -13,14 +13,11 @@ class SER:
                 "audio-classification", 
                 model="ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
                 device=device)
-        self.sr=sampling_rate 
 
-    def analyse(self, path=default):
-        audio, sr = librosa.load(path, sr=self.sr)
+    def analyse(self, path=default, sr=sampling_rate):
+        audio, sr = librosa.load(path)
 
-        predictions = self.pipe(audio, sr=sr)
+        predictions = self.pipe(audio)
         return predictions
 
-ser = SER()
-print(ser.analyse())
 
