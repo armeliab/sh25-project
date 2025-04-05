@@ -1,8 +1,10 @@
+import asyncio
 import streamlit as st
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import tempfile
+from hume_ai import analyse, get_emotion
 from sers import SER, SEA
 import os
 import torch
@@ -10,7 +12,7 @@ import torch
 #Microphone Input
 def record_audio(duration=5):
     """Record audio from microphone"""
-    fs = 22050*2  # Sample rate
+    fs = 16000  # Sample rate
     recording = st.empty()
     recording.write("Recording...")
     
@@ -39,9 +41,6 @@ def main():
     st.title("Simple Voice Recorder")
     st.write("Record and play your voice!")
 
-    ser = SER()
-    sea = SEA()
-
     # Initialize session state
     if 'recording' not in st.session_state:
         st.session_state.recording = False
@@ -54,7 +53,7 @@ def main():
         # Recording duration selector
         duration = st.slider("Recording Duration (seconds)", 
                            min_value=3, 
-                           max_value=10, 
+                           max_value=5, 
                            value=5,
                            help="Select how long you want to record")
     
@@ -73,15 +72,11 @@ def main():
                                    st.session_state.sample_rate)
         st.audio(temp_audio_file)
 
-        '''
-        prediction = ser.analyse(temp_audio_file, fs)
-        print(type(prediction[0]))
-        emotion = max(prediction, key=lambda x: x["score"])
-        st.write(emotion["label"])
-        '''
-
-        label = sea.analyse(temp_audio_file, fs)
-        st.write(label)
+        label = asyncio.run(analyse(temp_audio_file))
+        
+        # st.write(label)
+        top_label = get_emotion(label)
+        st.write(top_label)
         
         # Clean up temporary file
         if os.path.exists(temp_audio_file):
