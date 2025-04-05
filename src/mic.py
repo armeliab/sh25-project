@@ -2,12 +2,9 @@ import asyncio
 import streamlit as st
 import sounddevice as sd
 import soundfile as sf
-import numpy as np
 import tempfile
 from hume_ai import analyse, get_emotion
-from sers import SER, SEA
 import os
-import torch
 
 #Microphone Input
 def record_audio(duration=5):
