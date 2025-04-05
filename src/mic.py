@@ -3,14 +3,14 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import tempfile
-from model import SER
+from sers import SER, SEA
 import os
 import torch
 
 #Microphone Input
 def record_audio(duration=5):
     """Record audio from microphone"""
-    fs = 16000  # Sample rate
+    fs = 50000  # Sample rate
     recording = st.empty()
     recording.write("Recording...")
     
@@ -40,7 +40,8 @@ def main():
     st.write("Record and play your voice!")
 
     ser = SER()
-    
+    sea = SEA()
+
     # Initialize session state
     if 'recording' not in st.session_state:
         st.session_state.recording = False
@@ -72,10 +73,15 @@ def main():
                                    st.session_state.sample_rate)
         st.audio(temp_audio_file)
 
+        '''
         prediction = ser.analyse(temp_audio_file, fs)
         print(type(prediction[0]))
         emotion = max(prediction, key=lambda x: x["score"])
         st.write(emotion["label"])
+        '''
+
+        label = sea.analyse(temp_audio_file, fs)
+        st.write(label)
         
         # Clean up temporary file
         if os.path.exists(temp_audio_file):
