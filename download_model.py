@@ -1,4 +1,4 @@
-from transformers import pipeline
+from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 import os
 
 def download_model():
@@ -9,12 +9,17 @@ def download_model():
         if not os.path.exists("./model"):
             os.makedirs("./model")
         
-        # Initialize pipeline to download the model
-        pipeline(
-            task="audio-classification",
-            model="ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
-            device=-1
-        )
+        # Download model and feature extractor
+        model_name = "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+        
+        # Download and save the model
+        model = AutoModelForAudioClassification.from_pretrained(model_name)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
+        
+        # Save the model and feature extractor
+        model.save_pretrained("./model")
+        feature_extractor.save_pretrained("./model")
+        
         print("Model downloaded successfully!")
     except Exception as e:
         print(f"Error downloading model: {e}")
