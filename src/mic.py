@@ -10,7 +10,7 @@ import torch
 #Microphone Input
 def record_audio(duration=5):
     """Record audio from microphone"""
-    fs = 50000  # Sample rate
+    fs = 22050*2  # Sample rate
     recording = st.empty()
     recording.write("Recording...")
     

@@ -6,7 +6,7 @@ from transformers import pipeline
 from models import SEA_model
 
 default = "../data/Audio_Speech_Actors_01-24/Actor_01/03-01-01-01-01-01-01.wav"
-sampling_rate=50000
+sampling_rate=22050*2
 device = 0 if torch.cuda.is_available() else -1
 
 
@@ -29,16 +29,11 @@ class SEA:
         self.model = SEA_model()
         self.model.load_model()
         self.labels = [
-            "female_angry",   # index 0
-            "female_calm",    # index 1
-            "female_fearful", # index 2
-            "female_happy",   # index 3
-            "female_sad",     # index 4
-            "male_angry",     # index 5
-            "male_calm",      # index 6
-            "male_fearful",   # index 7
-            "male_happy",     # index 8
-            "male_sad"        # index 9
+            "angry",   # index 0
+            "calm",    # index 1
+            "fearful", # index 2
+            "happy",   # index 3
+            "sad",     # index 4
         ]
 
     def mfcc(self, path=default, sr=sampling_rate, target_length=216):
@@ -61,8 +56,11 @@ class SEA:
     
     def pred(self, mfcc):
         pred = self.model.model.predict(mfcc)
-        class_idx = np.argmax(pred[0])
         print(pred)
+        n = len(pred[0]) // 2
+        pred_short = [pred[0][i] + pred[0][i + n] for i in range(n)]
+        print(pred_short)
+        class_idx = np.argmax(pred_short)
         predicted_label = self.labels[class_idx]
         return predicted_label
     
