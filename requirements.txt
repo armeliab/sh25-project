@@ -1,0 +1,4 @@
+streamlit==1.32.0
+sounddevice==0.4.6
+soundfile==0.12.1
+numpy==1.26.4
