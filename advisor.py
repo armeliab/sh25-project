@@ -1,14 +1,23 @@
+from pyneuphonic import Neuphonic, TTSConfig
+from pyneuphonic.player import AudioPlayer
+from google import genai
+from google.genai import types
+
 import streamlit as st
+
 import speech_recognition as sr
 import sounddevice as sd
 import soundfile as sf
+
 import numpy as np
+
 import tempfile
 import os
 import librosa
 import torch
 from transformers import pipeline
 from scipy.signal import butter, filtfilt
+
 import time
 import warnings
 warnings.filterwarnings('ignore')
@@ -16,6 +25,24 @@ warnings.filterwarnings('ignore')
 # actual code that will be used
 # Model path (downloaded using download_model.py)
 MODEL_PATH = "./model"
+
+
+# Access the variables
+api_key = 'WRITE API KEY HERE'
+
+# Load the API key from the environment
+client = Neuphonic(api_key=api_key)
+
+sse = client.tts.SSEClient()
+
+# TTSConfig is a pydantic model so check out the source code for all valid options
+tts_config = TTSConfig(
+    speed=1.05,
+    lang_code='en', # replace the lang_code with the desired language code.
+    voice_id='e564ba7e-aa8d-46a2-96a8-8dffedade48f'  # use client.voices.list() to view all available voices
+)
+
+client = genai.Client(api_key="WRITE API KEY HERE")
 
 def enhance_audio(audio_data, sample_rate):
     """Enhance audio quality by applying noise reduction and filters"""
@@ -108,7 +135,7 @@ class EmotionHealthAdvisor:
             "Meditation or yoga can help improve mental health.",
             "A healthy diet helps maintain emotional stability."
         ]
-
+    
     def get_advice(self, emotion_results):
         """Provides customized advice based on emotion analysis results."""
         if not emotion_results:
@@ -135,6 +162,24 @@ class EmotionHealthAdvisor:
             'specific_advice': specific_advice,
             'general_tip': general_tip
         }
+    
+    def get_response(self, emotion_results, text_input):
+        # Find the emotion with highest probability
+        top_emotion = max(emotion_results, key=lambda x: x['score'])
+        emotion = top_emotion['label'].lower()
+
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config=types.GenerateContentConfig(
+                system_instruction="respond with mental health booster advice in a caring tone, make points on how to feel better but not too long for each point"
+                                    "maximum three points""flowy sentence between each points"
+                                    f"consider the state of the user emotion, that is {emotion}"
+            ),
+            contents=text_input,
+        )
+        responses = response.text.strip().replace("*", "")
+        return responses
+
 
 class SER:
     def __init__(self):
@@ -343,6 +388,7 @@ def main():
         # Display personalized advice
         st.write("### ? Personalized Advice")
         advice = advisor.get_advice(st.session_state.emotion)
+        ai_response = advisor.get_response(st.session_state.emotion, st.session_state.transcribed_text)
         
         # Display primary emotion and advice
         st.info(f"Primary emotion detected: {get_emotion_emoji(advice['primary_emotion'])} "
@@ -351,12 +397,22 @@ def main():
         
         # Display specific advice
         st.write("#### ? Advice for You")
-        for tip in advice['specific_advice']:
-            st.write(f"? {tip}")
+        # for tip in advice['specific_advice']:
+        #     st.write(f"? {tip}")
+        st.write(ai_response)
+
+        # Create an audio player with `pyaudio`
+        with AudioPlayer() as player:
+            response = sse.send(ai_response, tts_config=tts_config)
+            player.play(response)
+
+            player.save_audio('output_audi.wav')  # save the audio to a .wav file
         
-        # Display general wellness tip
-        st.write("#### ? General Wellness Tip")
-        st.write(f"? {advice['general_tip']}")
+        # # Display general wellness tip
+        # st.write("#### ? General Wellness Tip")
+        # st.write(f"? {advice['general_tip']}")
+
+        
 
     # Usage instructions
     with st.expander("?? How to Use"):
