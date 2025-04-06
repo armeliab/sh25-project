@@ -12,6 +12,8 @@ import hume_ai as h
 from transformers import pipeline
 import warnings
 warnings.filterwarnings('ignore')
+from login import login_page  
+from manageFirebase import store_emotion_log, display_flagged_warning 
 
 # Model path (downloaded using download_model.py)
 MODEL_PATH = "./model"
@@ -119,6 +121,14 @@ def main():
     st.title("? Voice Emotion Health Advisor")
     st.write("Record your voice and I'll analyze your emotions and provide personalized advice!")
     
+    user_id = login_page()
+    if not user_id:
+        st.info("Please log in to use the app.")
+        return
+    
+    if "user_email" in st.session_state:
+        st.markdown(f"**Logged in as:** {st.session_state['user_email']}")
+    
     # Check if model exists
     if not os.path.exists(MODEL_PATH):
         st.error("Model not found. Please run 'python download_model.py' first.")
@@ -130,6 +140,7 @@ def main():
         st.session_state.audio_data = None
         st.session_state.sample_rate = None
         st.session_state.emotion = None
+        st.session_state.audio_list = [] 
     
     # Initialize emotion recognition and advisor
     try:
@@ -159,12 +170,11 @@ def main():
             if audio_data is not None:
                 audio_data = audio_data.flatten()
                 max_samples = MAX_DURATION * sample_rate
-                audio_list = []
-                for i in range(len(audio_data)//max_samples):
-                    audio_list.append(audio_data[max_samples*i:max_samples*(i+1)])
-
+                audio_list = [audio_data[i:i+max_samples] for i in range(0, len(audio_data), max_samples)]
+                
                 st.session_state.audio_data = audio_data.flatten()
                 st.session_state.sample_rate = sample_rate
+                st.session_state.audio_list = audio_list
 
                 if st.session_state.audio_data is not None:
                     st.write("? Recorded Audio:")
@@ -196,10 +206,7 @@ def main():
                                         dic['score'] += score[1]
                                         total += score[1]
 
-                        if predictions:
-                            # Debug output
-                            st.write("Debug - Raw predictions:")
-                            st.write(st.session_state.emotion)
+                        
     
     # Show audio player and results if recording exists
     if st.session_state.audio_data is not None:
@@ -223,8 +230,8 @@ def main():
                     with cols[i]:
                         emoji = get_emotion_emoji(pred['name'])
                         st.write(f"{emoji} {pred['name'].capitalize()}")
-                        st.progress(pred['score']/len(audio_list))
-                        st.write(f"{(pred['score']*100)/len(audio_list):.1f}%")
+                        st.progress(pred['score']/len(st.session_state.audio_list))
+                        st.write(f"{(pred['score']*100)/len(st.session_state.audio_list):.1f}%")
                         
                     if count > 3:
                         break
@@ -236,7 +243,7 @@ def main():
                 # Display primary emotion and advice
                 st.info(f"Primary emotion detected: {get_emotion_emoji(advice['primary_emotion'])} "
                        f"{advice['primary_emotion'].capitalize()} "
-                       f"({advice['confidence']*100/len(audio_list):.1f}%)")
+                       f"({advice['confidence']*100/len(st.session_state.audio_list):.1f}%)")
                 
                 # Display specific advice
                 st.write("#### ? Advice for You")
@@ -247,6 +254,13 @@ def main():
                 st.write("#### ? General Wellness Tip")
                 st.write(f"? {advice['general_tip']}")
             
+                # Log emotion to Firebase (new addition)
+                transcript = st.text_area("Describe how you're feeling:")
+                if st.button("Submit Log"):
+                    store_emotion_log(user_id, advice['primary_emotion'], advice['specific_advice'][0], transcript)
+                    display_flagged_warning(user_id, st)
+                    st.success("Emotion log submitted to Firebase.")
+                    
             # Clean up temporary file
             try:
                 if os.path.exists(temp_audio_file):
