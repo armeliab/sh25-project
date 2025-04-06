@@ -161,6 +161,9 @@ def main():
                 
                     with st.spinner("? Analyzing emotions..."):
                         result = asyncio.run(h.analyse(temp_audio_file))
+                        if result.prosody.predictions is None:
+                            st.write("No voice detected.")
+                            return
                         predictions = h.get_emotion(result)
                         if predictions:
                             st.session_state.emotion = predictions
