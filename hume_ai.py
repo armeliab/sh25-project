@@ -5,7 +5,7 @@ from hume.expression_measurement.stream.socket_client import StreamConnectOption
 
 # Replace with your actual API key
 API_KEY = "qVkgjVw14DWqRVArgPZfCKtH50U8iwdoHw9naZUr0trmCOyi"
-default = "../data/Audio_Speech_Actors_01-24/Actor_01/03-01-01-01-01-01-01.wav"
+default = "data/Audio_Speech_Actors_01-24/Actor_01/03-01-01-01-01-01-01.wav"
 
 def get_emotion(result):
     """
@@ -20,7 +20,7 @@ def get_emotion(result):
         all_emotions.extend(item.emotions)
 
     best = max(all_emotions, key=lambda e: e.score)
-    return best.name
+    return all_emotions
 
 async def analyse(path=default):
     client = AsyncHumeClient(api_key=API_KEY)

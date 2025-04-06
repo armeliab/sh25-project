@@ -1,3 +1,4 @@
+import asyncio
 import streamlit as st
 import sounddevice as sd
 import soundfile as sf
@@ -7,6 +8,7 @@ import os
 import librosa
 import torch
 import json
+import hume_ai as h
 from transformers import pipeline
 import warnings
 warnings.filterwarnings('ignore')
@@ -38,8 +40,8 @@ class EmotionHealthAdvisor:
             }
         
         # Find the emotion with highest probability
-        top_emotion = max(emotion_results, key=lambda x: x['score'])
-        emotion = top_emotion['label'].lower()
+        top_emotion = max(emotion_results, key=lambda x: x.score)
+        emotion = top_emotion.name
         
         # Select advice for the detected emotion
         specific_advice = self.advice_database.get(emotion, ["No specific advice available for this emotion."])
@@ -49,7 +51,7 @@ class EmotionHealthAdvisor:
         
         return {
             'primary_emotion': emotion,
-            'confidence': top_emotion['score'],
+            'confidence': top_emotion.score,
             'specific_advice': specific_advice,
             'general_tip': general_tip
         }
@@ -62,41 +64,6 @@ class EmotionHealthAdvisor:
         return advice_data
 
 
-# Original SER class from emotion_mic.py
-class SER:
-    def __init__(self):
-        try:
-            self.pipe = pipeline(
-                task="audio-classification",
-                model=MODEL_PATH,
-                device=-1  # Use CPU
-            )
-            self.sr = 16000  # Fixed sampling rate
-        except Exception as e:
-            st.error(f"Error initializing model: {str(e)}")
-            raise e
-
-    def analyse(self, audio_data, sr):
-        temp_file = None
-        try:
-            if sr != self.sr:
-                audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=self.sr)
-            
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
-            sf.write(temp_file.name, audio_data, self.sr)
-            predictions = self.pipe(temp_file.name)
-            return predictions
-        except Exception as e:
-            st.error(f"Error analyzing audio: {str(e)}")
-            return None
-        finally:
-            if temp_file:
-                try:
-                    temp_file.close()
-                    if os.path.exists(temp_file.name):
-                        os.unlink(temp_file.name)
-                except Exception as e:
-                    st.warning(f"Could not cleanup temporary file: {str(e)}")
 
 def get_emotion_emoji(emotion):
     """Return emoji based on detected emotion"""
@@ -164,7 +131,6 @@ def main():
     
     # Initialize emotion recognition and advisor
     try:
-        ser = SER()
         advisor = EmotionHealthAdvisor()
         advisor.load_emotion_advice(FILE_PATH)
         
@@ -187,14 +153,20 @@ def main():
             if audio_data is not None:
                 st.session_state.audio_data = audio_data.flatten()
                 st.session_state.sample_rate = sample_rate
+
+                if st.session_state.audio_data is not None:
+                    st.write("? Recorded Audio:")
+                    temp_audio_file = save_audio(st.session_state.audio_data, 
+                                            st.session_state.sample_rate)
                 
-                with st.spinner("? Analyzing emotions..."):
-                    predictions = ser.analyse(st.session_state.audio_data, sample_rate)
-                    if predictions:
-                        st.session_state.emotion = predictions
-                        # Debug output
-                        st.write("Debug - Raw predictions:")
-                        st.write(predictions)
+                    with st.spinner("? Analyzing emotions..."):
+                        result = asyncio.run(h.analyse(temp_audio_file))
+                        predictions = h.get_emotion(result)
+                        if predictions:
+                            st.session_state.emotion = predictions
+                            # Debug output
+                            st.write("Debug - Raw predictions:")
+                            st.write(predictions)
     
     # Show audio player and results if recording exists
     if st.session_state.audio_data is not None:
@@ -208,17 +180,22 @@ def main():
                 # Display emotion analysis results
                 st.write("### ? Emotion Analysis Results")
                 
-                cols = st.columns(len(st.session_state.emotion))
+                cols = st.columns(len(st.session_state.emotion[:3]))
+                # st.write(f"cols: {len(st.session_state.emotion)}")
                 sorted_predictions = sorted(st.session_state.emotion, 
-                                         key=lambda x: x['score'], 
+                                         key=lambda x: x.score, 
                                          reverse=True)
-                
-                for i, pred in enumerate(sorted_predictions):
+                count = 0
+                for i, pred in enumerate(sorted_predictions[:3]):
+                    count += 1
                     with cols[i]:
-                        emoji = get_emotion_emoji(pred['label'])
-                        st.write(f"{emoji} {pred['label'].capitalize()}")
-                        st.progress(pred['score'])
-                        st.write(f"{pred['score']*100:.1f}%")
+                        emoji = get_emotion_emoji(pred.name)
+                        st.write(f"{emoji} {pred.name.capitalize()}")
+                        st.progress(pred.score)
+                        st.write(f"{pred.score*100:.1f}%")
+                        
+                    if count > 3:
+                        break
                 
                 # Display personalized advice
                 st.write("### ? Personalized Advice")
