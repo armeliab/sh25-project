@@ -27,6 +27,26 @@ Inspired by the challenge posed by *Neuphonic*, we imagined a future where voice
 | Audio Processing | Butterworth Filter, Noise Reduction (SciPy) |
 | (Optional) Database | Firebase Firestore for storing logs |
 
+
+## GDG Challenge
+Total number of team: 4
+
+Project name: Moodify
+
+Google technologies used: Firebase, Google Cloud Firestore api, Gemini API
+
+Problem that could exist in the year 2080:
+   In 2080, even with super advanced technologies like AI and flying cars being human doesn't change. We still feel sadness, stress, anxiety, loneliness, fear just like we do today.
+   Maybe by 2080, people are overwhelmed by information, virtual realities, aliens(?), or pressure to be constantly connected. No matter how futuristic the world gets, our inner world still needs attention, support, and understanding
+   
+Proposed solution:
+   Our project is to recognize how someone feels and that could be the first step toward healing. By generating a response especially one that’s kind, empathetic, or uplifting it gives people something most tech doesn’t: emotional validation
+
+Code summary:
+The code records the user's voice via the microphone, enhances the audio by applying noise filtering, and saves the audio as a file. The recorded voice is then converted into text using speech recognition.
+Next, a classification model from Hugging Face is used to predict the user's emotion based on the voice. Based on both the content of the speech and the predicted emotion, personalized mental health advice is generated using Gemini AI. Finally, the generated advice is converted back into audio and played to the user.
+
+
 ## Setup Instructions
 
 ### Prerequisites
