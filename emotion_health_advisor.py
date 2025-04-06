@@ -6,65 +6,19 @@ import tempfile
 import os
 import librosa
 import torch
+import json
 from transformers import pipeline
 import warnings
 warnings.filterwarnings('ignore')
 
 # Model path (downloaded using download_model.py)
 MODEL_PATH = "./model"
+FILE_PATH="responses.json"
 
 class EmotionHealthAdvisor:
     def __init__(self):
-        self.advice_database = {
-            "fearful": [
-                "Fear is a natural emotion. Try to release anxiety through deep breathing.",
-                "Remind yourself that you're in a safe place and look around slowly.",
-                "When anxious, try having a warm cup of tea to calm yourself.",
-                "Writing down your worries in a notebook can help organize your thoughts."
-            ],
-            "calm": [
-                "You're in a great peaceful state. Keep practicing mindfulness.",
-                "This is a perfect time to focus on your goals and aspirations.",
-                "Use this calm energy to engage in creative activities.",
-                "Share your peaceful state with others around you."
-            ],
-            "neutral": [
-                "Maintain your balanced state while practicing mindfulness.",
-                "Appreciate this moment and think about things you're grateful for.",
-                "How about trying a new hobby or learning something new?",
-                "Maintaining a balanced emotional state is very important. You're doing well!"
-            ],
-            "sad": [
-                "Don't stay alone when you're feeling down. Talk to friends or family.",
-                "How about listening to your favorite music to comfort yourself?",
-                "Try taking a short walk or light exercise to change your mood.",
-                "Remember that what you're feeling is temporary. This too shall pass."
-            ],
-            "surprised": [
-                "Take a moment to process your surprise and breathe deeply.",
-                "Channel this energy into something productive.",
-                "Use this heightened awareness to explore new perspectives.",
-                "Share your experience with others if you feel comfortable."
-            ],
-            "happy": [
-                "Recording happy moments in a diary or photo can create good memories for later.",
-                "How about sharing this joy with people around you?",
-                "Use this positive energy to start something you've been wanting to try.",
-                "When you're happy, it's a great time to focus on creative activities!"
-            ],
-            "angry": [
-                "Take deep breaths and exhale slowly. This helps calm your anger.",
-                "How about taking a walk to calm your mind?",
-                "When angry, creative activities like exercise or drawing can help.",
-                "Your emotions are natural, but it's important to express them constructively."
-            ],
-            "disgust": [
-                "Try to identify what's causing this feeling and address it directly.",
-                "Focus on pleasant surroundings or memories to shift your perspective.",
-                "Consider talking to someone about what's bothering you.",
-                "Remember that this feeling will pass with time."
-            ]
-        }
+        with open(FILE_PATH, "r", encoding="utf-8") as f:
+            self.advice_database = json.load(f)  # returns a dict
         
         self.general_wellness_tips = [
             "Regular exercise is good for both physical and mental health.",
@@ -99,6 +53,14 @@ class EmotionHealthAdvisor:
             'specific_advice': specific_advice,
             'general_tip': general_tip
         }
+    
+    def load_emotion_advice(self, file_path="responses.json"):
+        """Load the emotion → advice mapping from a JSON file."""
+        with open(file_path, "r", encoding="utf-8") as f:
+            advice_data = json.load(f)  # returns a dict
+        self.advice_database = advice_data
+        return advice_data
+
 
 # Original SER class from emotion_mic.py
 class SER:
@@ -204,6 +166,8 @@ def main():
     try:
         ser = SER()
         advisor = EmotionHealthAdvisor()
+        advisor.load_emotion_advice(FILE_PATH)
+        
     except Exception as e:
         st.error("Failed to initialize emotion recognition model.")
         st.stop()
