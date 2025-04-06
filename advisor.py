@@ -1,7 +1,9 @@
+import asyncio
+import json
 from pyneuphonic import Neuphonic, TTSConfig
 from pyneuphonic.player import AudioPlayer
-from google import genai
-from google.genai import types
+# from google import genai
+# from google.genai import types
 
 import streamlit as st
 
@@ -10,12 +12,9 @@ import sounddevice as sd
 import soundfile as sf
 
 import numpy as np
-
+import hume_rest as h
 import tempfile
 import os
-import librosa
-import torch
-from transformers import pipeline
 from scipy.signal import butter, filtfilt
 
 import time
@@ -25,13 +24,16 @@ warnings.filterwarnings('ignore')
 # actual code that will be used
 # Model path (downloaded using download_model.py)
 MODEL_PATH = "./model"
+FILE_PATH="responses.json"
+EMOTION_PATH="emotions.json"
+MAX_DURATION = 5  # seconds
 
 
 # Access the variables
-api_key = 'WRITE API KEY HERE'
+key = 'db7231b553380b6b520836e937b1413c0e91640d1d3655e84527d37479f3cfa2.e6808a68-7c07-40ba-931a-5c1bd14a7421'
 
 # Load the API key from the environment
-client = Neuphonic(api_key=api_key)
+client = Neuphonic(api_key=key)
 
 sse = client.tts.SSEClient()
 
@@ -42,7 +44,7 @@ tts_config = TTSConfig(
     voice_id='e564ba7e-aa8d-46a2-96a8-8dffedade48f'  # use client.voices.list() to view all available voices
 )
 
-client = genai.Client(api_key="WRITE API KEY HERE")
+# client = genai.Client(api_key="WRITE API KEY HERE")
 
 def enhance_audio(audio_data, sample_rate):
     """Enhance audio quality by applying noise reduction and filters"""
@@ -148,7 +150,7 @@ class EmotionHealthAdvisor:
         
         # Find the emotion with highest probability
         top_emotion = max(emotion_results, key=lambda x: x['score'])
-        emotion = top_emotion['label'].lower()
+        emotion = top_emotion['name'].lower()
         
         # Select advice for the detected emotion
         specific_advice = self.advice_database.get(emotion, ["No specific advice available for this emotion."])
@@ -163,10 +165,11 @@ class EmotionHealthAdvisor:
             'general_tip': general_tip
         }
     
+    '''
     def get_response(self, emotion_results, text_input):
         # Find the emotion with highest probability
         top_emotion = max(emotion_results, key=lambda x: x['score'])
-        emotion = top_emotion['label'].lower()
+        emotion = top_emotion['name'].lower()
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
@@ -179,42 +182,9 @@ class EmotionHealthAdvisor:
         )
         responses = response.text.strip().replace("*", "")
         return responses
+    '''
 
 
-class SER:
-    def __init__(self):
-        try:
-            self.pipe = pipeline(
-                task="audio-classification",
-                model=MODEL_PATH,
-                device=-1  # Use CPU
-            )
-            self.sr = 16000  # Fixed sampling rate
-        except Exception as e:
-            st.error(f"Error initializing model: {str(e)}")
-            raise e
-
-    def analyse(self, audio_data, sr):
-        temp_file = None
-        try:
-            if sr != self.sr:
-                audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=self.sr)
-            
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
-            sf.write(temp_file.name, audio_data, self.sr)
-            predictions = self.pipe(temp_file.name)
-            return predictions
-        except Exception as e:
-            st.error(f"Error analyzing audio: {str(e)}")
-            return None
-        finally:
-            if temp_file:
-                try:
-                    temp_file.close()
-                    if os.path.exists(temp_file.name):
-                        os.unlink(temp_file.name)
-                except Exception as e:
-                    st.warning(f"Could not cleanup temporary file: {str(e)}")
 
 def get_emotion_emoji(emotion):
     """Return emoji based on detected emotion"""
@@ -229,6 +199,7 @@ def get_emotion_emoji(emotion):
         "disgust": "?"
     }
     return emotion_emojis.get(emotion.lower(), "?")
+
 
 def main():
     st.title("? Enhanced Voice Emotion Analyzer")
@@ -246,10 +217,10 @@ def main():
         st.session_state.sample_rate = None
         st.session_state.emotion = None
         st.session_state.transcribed_text = None
+        st.session_state.recorded = False
     
     # Initialize emotion recognition and advisor
     try:
-        ser = SER()
         advisor = EmotionHealthAdvisor()
     except Exception as e:
         st.error("Failed to initialize emotion recognition model.")
@@ -278,7 +249,7 @@ def main():
     with col2:
         duration = st.slider("Recording Duration (seconds)", 
                            min_value=3, 
-                           max_value=10, 
+                           max_value=15, 
                            value=5,
                            help="Select how long you want to record")
     
@@ -321,6 +292,7 @@ def main():
                     enhanced_audio_path = save_audio_wav(enhanced_audio, sample_rate)
 
                     if enhanced_audio_path:
+                        max_samples = MAX_DURATION * sample_rate
                         # Store audio data in session state
                         st.session_state.audio_data = enhanced_audio
                         st.session_state.sample_rate = sample_rate
@@ -329,6 +301,7 @@ def main():
                         st.write("? Recorded Audio:")
                         st.audio(enhanced_audio_path)
 
+                        '''
                         # Convert enhanced audio to text
                         with sr.AudioFile(enhanced_audio_path) as source:
                             enhanced_audio_data = recognizer.record(source)
@@ -337,12 +310,43 @@ def main():
                                 language=languages[selected_language]
                             )
                             st.session_state.transcribed_text = text
-
+                        '''
+                        
                         # Perform emotion analysis
                         with st.spinner("? Analyzing emotions..."):
-                            predictions = ser.analyse(enhanced_audio, sample_rate)
-                            if predictions:
-                                st.session_state.emotion = predictions
+                            if enhanced_audio is not None:
+                                results = []
+                                max_samples = MAX_DURATION * sample_rate
+                                audio_list = []
+                                for i in range(1+len(enhanced_audio)//max_samples):
+                                    audio_list.append(enhanced_audio[max_samples*i:max_samples*(i+1)])
+
+                                
+                                        
+                                for audio in audio_list:
+                                    temp_audio_file = save_audio_wav(audio, 
+                                                    st.session_state.sample_rate)
+                                    
+                                    result = asyncio.run(h.analyse(temp_audio_file))
+                                    try:
+                                        result = result.results.predictions[0].models.prosody.grouped_predictions[0].predictions[0].emotions
+                                        results.append(result)
+                                    except:
+                                        pass
+                                        
+
+                                if not results:
+                                    st.session_state.emotion = None
+                                else:
+                                    with open(EMOTION_PATH, "r", encoding="utf-8") as f:
+                                        st.session_state.emotion = json.load(f)  # returns a dict
+                                        
+                                    for result in results:
+                                        for name, score in result:
+                                            dic = next(item for item in st.session_state.emotion if item['name'] == str(name[1]))
+                                            dic['score'] += score[1]
+                                st.session_state.recorded = True
+
 
                         # Clean up temporary files
                         try:
@@ -361,7 +365,10 @@ def main():
                     st.error(f"An error occurred: {str(e)}")
 
     # Show results if we have both transcribed text and emotion analysis
-    if st.session_state.transcribed_text and st.session_state.emotion:
+    # if st.session_state.transcribed_text and st.session_state.emotion:
+    if st.session_state.recorded and not st.session_state.emotion:
+        st.write('## No voice detected. Please record again.')
+    if st.session_state.emotion:
         # Display transcribed text
         st.write("### ? Transcribed Text:")
         text_area = st.text_area("", st.session_state.transcribed_text, height=100)
@@ -373,17 +380,21 @@ def main():
         # Display emotion analysis results
         st.write("### ? Emotion Analysis Results")
         
-        cols = st.columns(len(st.session_state.emotion))
+        cols = st.columns(len(st.session_state.emotion[:3]))
         sorted_predictions = sorted(st.session_state.emotion, 
                                  key=lambda x: x['score'], 
                                  reverse=True)
         
-        for i, pred in enumerate(sorted_predictions):
+        count = 0
+        for i, pred in enumerate(sorted_predictions[:3]):
+            count += 1
             with cols[i]:
-                emoji = get_emotion_emoji(pred['label'])
-                st.write(f"{emoji} {pred['label'].capitalize()}")
-                st.progress(pred['score'])
-                st.write(f"{pred['score']*100:.1f}%")
+                emoji = get_emotion_emoji(pred['name'])
+                st.write(f"{emoji} {pred['name'].capitalize()}")
+                st.progress(pred['score']/len(audio_list))
+                st.write(f"{pred['score']*100/len(audio_list):.1f}%")
+                if count > 3:
+                        break
         
         # Display personalized advice
         st.write("### ? Personalized Advice")
@@ -403,7 +414,8 @@ def main():
 
         # Create an audio player with `pyaudio`
         with AudioPlayer() as player:
-            response = sse.send(ai_response, tts_config=tts_config)
+            # response = sse.send(ai_response, tts_config=tts_config)
+            response = sse.send(advice, tts_config=tts_config)
             player.play(response)
 
             player.save_audio('output_audi.wav')  # save the audio to a .wav file
