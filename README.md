@@ -127,13 +127,12 @@ scipy>=1.11.3
 
 For a complete list of dependencies, see `requirements.txt`.
 
-## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Contributors
 
-- [Your Name]
-- [Team Member 1]
-- [Team Member 2]
+- Jiho Park
+- Armelia Kasenda
+- Jihyun Moon
+- Minjun Kim 
 
