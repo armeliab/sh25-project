@@ -16,6 +16,8 @@ warnings.filterwarnings('ignore')
 # Model path (downloaded using download_model.py)
 MODEL_PATH = "./model"
 FILE_PATH="responses.json"
+EMOTION_PATH="emotions.json"
+MAX_DURATION = 5  # seconds
 
 class EmotionHealthAdvisor:
     def __init__(self):
@@ -40,8 +42,8 @@ class EmotionHealthAdvisor:
             }
         
         # Find the emotion with highest probability
-        top_emotion = max(emotion_results, key=lambda x: x.score)
-        emotion = top_emotion.name
+        top_emotion = max(emotion_results, key=lambda x: x['score'])
+        emotion = top_emotion['name']
         
         # Select advice for the detected emotion
         specific_advice = self.advice_database.get(emotion, ["No specific advice available for this emotion."])
@@ -51,7 +53,7 @@ class EmotionHealthAdvisor:
         
         return {
             'primary_emotion': emotion,
-            'confidence': top_emotion.score,
+            'confidence': top_emotion['score'],
             'specific_advice': specific_advice,
             'general_tip': general_tip
         }
@@ -143,14 +145,24 @@ def main():
     with col1:
         duration = st.slider("Recording Duration (seconds)", 
                            min_value=3, 
-                           max_value=10, 
+                           max_value=15, 
                            value=5,
+                           step=1,
                            help="Select how long you want to record")
     
     with col2:
         if st.button("?? Start Recording"):
+            results = []
+            predictions = []
+            total = 0
             audio_data, sample_rate = record_audio(duration)
             if audio_data is not None:
+                audio_data = audio_data.flatten()
+                max_samples = MAX_DURATION * sample_rate
+                audio_list = []
+                for i in range(len(audio_data)//max_samples):
+                    audio_list.append(audio_data[max_samples*i:max_samples*(i+1)])
+
                 st.session_state.audio_data = audio_data.flatten()
                 st.session_state.sample_rate = sample_rate
 
@@ -160,16 +172,34 @@ def main():
                                             st.session_state.sample_rate)
                 
                     with st.spinner("? Analyzing emotions..."):
-                        result = asyncio.run(h.analyse(temp_audio_file))
-                        if result.prosody.predictions is None:
-                            st.write("No voice detected.")
-                            return
-                        predictions = h.get_emotion(result)
+                        
+                        for audio in audio_list:
+                            temp_audio_file = save_audio(audio, 
+                                            st.session_state.sample_rate)
+                            
+                            result = asyncio.run(h.analyse(temp_audio_file))
+                            if result.prosody.predictions is not None:
+                                results.append(result)
+
+                            if not results:
+                                st.session_state.emotion = None
+                                st.write("No voice detected.")
+                            else:
+                                with open(EMOTION_PATH, "r", encoding="utf-8") as f:
+                                    st.session_state.emotion = json.load(f)  # returns a dict
+                                
+                                for result in results:
+                                    predictions.append(h.get_emotion(result))
+                                for pred in predictions:
+                                    for key, score in pred:
+                                        dic = next(item for item in st.session_state.emotion if item['name'] == str(key[1]))
+                                        dic['score'] += score[1]
+                                        total += score[1]
+
                         if predictions:
-                            st.session_state.emotion = predictions
                             # Debug output
                             st.write("Debug - Raw predictions:")
-                            st.write(predictions)
+                            st.write(st.session_state.emotion)
     
     # Show audio player and results if recording exists
     if st.session_state.audio_data is not None:
@@ -184,18 +214,17 @@ def main():
                 st.write("### ? Emotion Analysis Results")
                 
                 cols = st.columns(len(st.session_state.emotion[:3]))
-                # st.write(f"cols: {len(st.session_state.emotion)}")
                 sorted_predictions = sorted(st.session_state.emotion, 
-                                         key=lambda x: x.score, 
+                                         key=lambda x: x['score'], 
                                          reverse=True)
                 count = 0
                 for i, pred in enumerate(sorted_predictions[:3]):
                     count += 1
                     with cols[i]:
-                        emoji = get_emotion_emoji(pred.name)
-                        st.write(f"{emoji} {pred.name.capitalize()}")
-                        st.progress(pred.score)
-                        st.write(f"{pred.score*100:.1f}%")
+                        emoji = get_emotion_emoji(pred['name'])
+                        st.write(f"{emoji} {pred['name'].capitalize()}")
+                        st.progress(pred['score']/len(audio_list))
+                        st.write(f"{(pred['score']*100)/len(audio_list):.1f}%")
                         
                     if count > 3:
                         break
@@ -207,7 +236,7 @@ def main():
                 # Display primary emotion and advice
                 st.info(f"Primary emotion detected: {get_emotion_emoji(advice['primary_emotion'])} "
                        f"{advice['primary_emotion'].capitalize()} "
-                       f"({advice['confidence']*100:.1f}%)")
+                       f"({advice['confidence']*100/len(audio_list):.1f}%)")
                 
                 # Display specific advice
                 st.write("#### ? Advice for You")
